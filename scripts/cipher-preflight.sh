@@ -17,7 +17,7 @@ prop() {
 
 app_package="$(sed -n 's/^APP_PACKAGE=//p' gradle.properties | tail -n 1 | tr -d '\r')"
 [[ "$app_package" =~ ^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*){2,}$ ]] || fail "APP_PACKAGE belum valid"
-[[ "$app_package" != org.telegram.messenger* ]] || fail "Ganti APP_PACKAGE bawaan Telegram terlebih dahulu"
+[[ "$app_package" == "com.cipher.client01" ]] || fail "APP_PACKAGE tidak sesuai identitas Telecipher yang ditetapkan"
 ok "Package khusus fork sudah diatur"
 
 api_id="${TG_CIPHER_API_ID:-$(prop TG_CIPHER_API_ID)}"
@@ -28,10 +28,39 @@ ok "Kredensial Telegram tersedia (nilai tidak ditampilkan)"
 
 # Standalone uses APP_PACKAGE exactly (no upstream .web suffix).
 effective_package="$app_package"
-if ! grep -Fq "$effective_package" TMessagesProj/google-services.json; then
-  fail "Firebase config tidak mencantumkan package $effective_package"
-fi
-ok "Firebase config mencantumkan package standalone"
+# Validate both Firebase JSONs structurally, not with an accidental string match.
+python3 - "$effective_package" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+expected = sys.argv[1]
+sources = [
+    Path("TMessagesProj/google-services.json"),
+    Path("TMessagesProj_AppStandalone/google-services.json"),
+]
+projects = set()
+for file in sources:
+    if not file.is_file():
+        raise SystemExit("FAIL: Firebase config tidak ditemukan: " + str(file))
+    try:
+        config = json.loads(file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        raise SystemExit("FAIL: Firebase JSON tidak valid: " + str(file))
+    project = config.get("project_info", {}).get("project_id", "")
+    if not project or project == "tmessages2":
+        raise SystemExit("FAIL: Gunakan project Firebase pribadi, bukan project Telegram resmi")
+    projects.add(project)
+    clients = [
+        client.get("client_info", {}).get("android_client_info", {}).get("package_name")
+        for client in config.get("client", [])
+    ]
+    if expected not in clients:
+        raise SystemExit("FAIL: Package Firebase tidak cocok dengan " + expected)
+if len(projects) != 1:
+    raise SystemExit("FAIL: Kedua modul harus menggunakan project Firebase yang sama")
+print("OK: Firebase pribadi valid untuk package " + expected)
+PY
 
 # Original release.keystore is a tracked upstream dummy. It must be replaced
 # temporarily at build time, not committed.
