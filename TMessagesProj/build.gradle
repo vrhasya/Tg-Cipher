@@ -1,5 +1,21 @@
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
 
+/*
+ * TG Cipher fork credentials:
+ * - TG_CIPHER_API_ID and TG_CIPHER_API_HASH may be passed as environment variables
+ *   or configured in ignored local.properties.
+ * - Never commit real values in this repository.
+ */
+def cipherApiId = (System.getenv('TG_CIPHER_API_ID') ?: getProps('TG_CIPHER_API_ID') ?: '0').toString().trim()
+def cipherApiHash = (System.getenv('TG_CIPHER_API_HASH') ?: getProps('TG_CIPHER_API_HASH') ?: '').toString().trim()
+
+if (!(cipherApiId ==~ /[0-9]+/)) {
+    throw new GradleException('TG_CIPHER_API_ID must contain only digits')
+}
+if (cipherApiHash && !(cipherApiHash ==~ /[a-fA-F0-9]{32}/)) {
+    throw new GradleException('TG_CIPHER_API_HASH must be a 32-character hexadecimal value')
+}
+
 apply plugin: 'com.android.library'
 apply plugin: 'org.telegram.build-plugin'
 apply plugin: 'idea'
@@ -135,6 +151,8 @@ android {
     }
 
     defaultConfig {
+        buildConfigField "int", "TG_CIPHER_API_ID", cipherApiId
+        buildConfigField "String", "TG_CIPHER_API_HASH", "\\\""+ cipherApiHash + "\\\""
         minSdkVersion 23
         targetSdkVersion 36
 
