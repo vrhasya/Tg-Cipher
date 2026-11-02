@@ -126,6 +126,9 @@ dependencies {
 }
 
 android {
+    buildFeatures {
+        buildConfig = true
+    }
     compileSdkVersion 36
     buildToolsVersion '36.0.0'
     ndkVersion "27.2.12479018"
@@ -152,7 +155,7 @@ android {
 
     defaultConfig {
         buildConfigField "int", "TG_CIPHER_API_ID", cipherApiId
-        buildConfigField "String", "TG_CIPHER_API_HASH", "\\\""+ cipherApiHash + "\\\""
+        buildConfigField "String", "TG_CIPHER_API_HASH", '"' + cipherApiHash + '"'
         minSdkVersion 23
         targetSdkVersion 36
 
