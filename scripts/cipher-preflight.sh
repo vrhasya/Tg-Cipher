@@ -26,8 +26,8 @@ api_hash="${TG_CIPHER_API_HASH:-$(prop TG_CIPHER_API_HASH)}"
 [[ "$api_hash" =~ ^[a-fA-F0-9]{32}$ && "$api_hash" != "014b35b6184100b085b0d0572f9b5103" ]] || fail "TG_CIPHER_API_HASH belum diisi dengan API hash milik Anda"
 ok "Kredensial Telegram tersedia (nilai tidak ditampilkan)"
 
-# TMessagesProj_AppStandalone adds .web to the applicationId.
-effective_package="$app_package.web"
+# Standalone uses APP_PACKAGE exactly (no upstream .web suffix).
+effective_package="$app_package"
 if ! grep -Fq "$effective_package" TMessagesProj/google-services.json; then
   fail "Firebase config tidak mencantumkan package $effective_package"
 fi
