@@ -1,0 +1,125 @@
+name: Telecipher Android standalone build
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type BUILD_TELECIPHER to run the build"
+        required: true
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: telecipher-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: "${{ inputs.confirm == 'BUILD_TELECIPHER' }}"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout fork with native submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android tooling
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle (no shared build cache for private credentials)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-disabled: true
+
+      - name: Install Android SDK 36 and native toolchains
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager --install \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;27.2.12479018" \
+            "cmake;3.22.1"
+          df -h .
+
+      - name: Prepare private Firebase, API, and signing credentials
+        shell: bash
+        env:
+          TG_CIPHER_API_ID: "${{ secrets.TELECIPHER_API_ID }}"
+          TG_CIPHER_API_HASH: "${{ secrets.TELECIPHER_API_HASH }}"
+          FIREBASE_B64: "${{ secrets.TELECIPHER_FIREBASE_JSON_B64 }}"
+          KEYSTORE_B64: "${{ secrets.TELECIPHER_KEYSTORE_B64 }}"
+          KEY_ALIAS: "${{ secrets.TELECIPHER_KEY_ALIAS }}"
+          KEYSTORE_PASSWORD: "${{ secrets.TELECIPHER_STORE_PASSWORD }}"
+          KEY_PASSWORD: "${{ secrets.TELECIPHER_KEY_PASSWORD }}"
+        run: |
+          set -euo pipefail
+          umask 077
+          for v in TG_CIPHER_API_ID TG_CIPHER_API_HASH FIREBASE_B64 KEYSTORE_B64 KEY_ALIAS KEYSTORE_PASSWORD KEY_PASSWORD; do
+            if [[ -z "${!v}" ]]; then
+              echo "::error::GitHub secret untuk $v belum diatur"
+              exit 1
+            fi
+          done
+          printf '%s' "$FIREBASE_B64" | base64 -d > TMessagesProj/google-services.json
+          cp TMessagesProj/google-services.json TMessagesProj_AppStandalone/google-services.json
+          printf '%s' "$KEYSTORE_B64" | base64 -d > TMessagesProj/config/release.keystore
+          printf 'Konfigurasi privat telah dipasang sementara pada runner.\n'
+
+      - name: Verify identity and private configuration
+        shell: bash
+        env:
+          TG_CIPHER_API_ID: "${{ secrets.TELECIPHER_API_ID }}"
+          TG_CIPHER_API_HASH: "${{ secrets.TELECIPHER_API_HASH }}"
+        run: |
+          set -euo pipefail
+          bash scripts/cipher-preflight.sh
+
+      - name: Build signed standalone APK
+        shell: bash
+        env:
+          TG_CIPHER_API_ID: "${{ secrets.TELECIPHER_API_ID }}"
+          TG_CIPHER_API_HASH: "${{ secrets.TELECIPHER_API_HASH }}"
+          ORG_GRADLE_PROJECT_RELEASE_KEY_ALIAS: "${{ secrets.TELECIPHER_KEY_ALIAS }}"
+          ORG_GRADLE_PROJECT_RELEASE_STORE_PASSWORD: "${{ secrets.TELECIPHER_STORE_PASSWORD }}"
+          ORG_GRADLE_PROJECT_RELEASE_KEY_PASSWORD: "${{ secrets.TELECIPHER_KEY_PASSWORD }}"
+        run: |
+          set -euo pipefail
+          # Keep Gradle within the hosted runner's memory budget.
+          sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m/' gradle.properties
+          bash ./gradlew --no-daemon --max-workers=2 --no-parallel \
+            :TMessagesProj_AppStandalone:assembleAfatStandalone
+
+      - name: Validate signed APK and application package
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=$(find TMessagesProj_AppStandalone/build/outputs/apk -type f -name '*.apk' -print -quit)
+          [[ -n "$APK" && -s "$APK" ]] || { echo "::error::APK belum dihasilkan"; exit 1; }
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" |
+            grep -m1 "^package:" |
+            grep -F "name='com.cipher.client01'"
+          unzip -l "$APK" | grep -q 'libtmessages.49.so'
+          mkdir -p output
+          cp "$APK" output/Telecipher-standalone.apk
+          sha256sum output/Telecipher-standalone.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Telecipher-standalone
+          path: output/Telecipher-standalone.apk
+          if-no-files-found: error
+          retention-days: 3
