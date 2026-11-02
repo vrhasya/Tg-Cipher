@@ -75,7 +75,7 @@ android {
             debuggable true
             jniDebuggable true
             signingConfig signingConfigs.debug
-            applicationIdSuffix ".web"
+            // Telecipher uses the exact APP_PACKAGE without an upstream suffix.
             minifyEnabled false
             multiDexEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), '../TMessagesProj/proguard-rules.pro'
@@ -86,7 +86,7 @@ android {
             debuggable false
             jniDebuggable false
             signingConfig signingConfigs.release
-            applicationIdSuffix ".web"
+            // Telecipher uses the exact APP_PACKAGE without an upstream suffix.
             minifyEnabled true
             shrinkResources true
             multiDexEnabled true
