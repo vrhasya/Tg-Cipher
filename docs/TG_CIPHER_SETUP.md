@@ -5,7 +5,7 @@ Status: persiapan fork, **belum ada APK yang dibuat atau login yang diuji**.
 ## Konfigurasi yang wajib ditentukan
 
 1. Tetapkan identitas aplikasi final (nama, package, ikon). Jangan gunakan nama/ikon Telegram resmi untuk publikasi.
-2. Di `gradle.properties` ubah `APP_PACKAGE` dari `org.telegram.messenger` menjadi package milik Anda. Untuk modul `TMessagesProj_AppStandalone`, build type `standalone` menambahkan suffix `.web`; contoh `APP_PACKAGE=com.cipher.tg01` menghasilkan `com.cipher.tg01.web`. Jangan daftarkan package Firebase yang keliru.
+2. Identitas ditetapkan: **Telecipher**, `APP_PACKAGE=com.cipher.client01`. Build type `standalone` tidak menggunakan suffix `.web`. Daftarkan Firebase Android app dengan package tepat `com.cipher.client01`.
 3. Ambil `api_id` dan `api_hash` milik Anda dari https://my.telegram.org. Jangan gunakan nilai bawaan Telegram.
 4. Isi `TG_CIPHER_API_ID` dan `TG_CIPHER_API_HASH` melalui **environment variables** build atau file `local.properties` (sudah diabaikan Git). Contoh isi lokal:
    ```properties
